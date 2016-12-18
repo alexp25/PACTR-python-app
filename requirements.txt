@@ -1,8 +1,0 @@
-numpy
-pyserial
-imutils
-Pillow
-matplotlib
-python-csv
-
-
