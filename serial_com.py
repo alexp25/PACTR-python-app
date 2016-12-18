@@ -13,7 +13,7 @@ class serialReadThread (threading.Thread):
         threading.Thread.__init__(self)
         self.threadID = threadID
         self.name = name
-        self._stopperper = threading.Event()
+        self._stopper = threading.Event()
         self._req = threading.Event()
         self.time1 = time.time()
         self.data = 0
@@ -23,21 +23,10 @@ class serialReadThread (threading.Thread):
         self.queue_read = queue_read
 
     def stop(self):
-        self._stopperper.set()
+        self._stopper.set()
 
     def stopped(self):
-        return self._stopperper.isSet()
-
-    def get_received_data(self):
-        flag = self.receivedFlag
-        data = self.data_received
-        self.receivedFlag = False
-        self.data_received = ""
-        return [flag,data]
-
-    def serial_data(self):
-        while True:
-            yield self.ser.readline()
+        return self._stopper.isSet()
 
     def run(self):
         line=''

@@ -14,8 +14,14 @@ import json
 import traceback
 # thread messaging
 from multiprocessing import Queue
-# custom modules
-from serial_com import serialCom
+import serial
+
+
+#plot
+import matplotlib
+matplotlib.use("TkAgg")
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2TkAgg
+from matplotlib.figure import Figure
 
 qsize = 5
 queue_gui = Queue(maxsize=10)
@@ -25,40 +31,124 @@ queue_serial_gui = Queue(maxsize=qsize)
 
 CONFIG_FILE = 'config/config.json'
 GLOBAL_PARAMS = {}
-serialcom = serialCom("COM5",115200)
 
-class SerialManagerThread(threading.Thread):
-    def __init__(self, threadID):
+class serialReadThread (threading.Thread):
+    def __init__(self,threadID,name,ser,queue_read):
         threading.Thread.__init__(self)
         self.threadID = threadID
+        self.name = name
         self._stopper = threading.Event()
+        self._req = threading.Event()
+        self.time1 = time.time()
+        self.data = 0
+        self.data_received = 0
+        self.ser = ser
+        self.receivedFlag = False
+        self.queue_read = queue_read
+
+    def stop(self):
+        self._stopper.set()
+
+    def stopped(self):
+        return self._stopper.isSet()
+
+    def run(self):
+        line=''
+        while True:
+            c = self.ser.read().decode()
+            line += c
+            if c=='\n':
+                self.queue_read.put(line)
+                line = ''
+            if self.stopped():
+                break
+
+        if self.ser.isOpen() == True:
+            self.ser.close()
+
+class serialWriteThread (threading.Thread):
+    def __init__(self,threadID,name,ser,queue_write):
+        threading.Thread.__init__(self)
+        self.threadID = threadID
+        self.name = name
+        self._stopper = threading.Event()
+        self._req = threading.Event()
+        self.ser = ser
+        self.queue_write=queue_write
+
     def stop(self):
         self._stopper.set()
     def stopped(self):
         return self._stopper.isSet()
+
+    def run(self):
+        while True:
+            if self.stopped():
+                break
+            time.sleep(0.001)
+            try:
+                while self.queue_write.empty() == False:
+                    sdata = self.queue_write.get(block=False)
+                    self.ser.write(sdata.encode())
+            except:
+                print("serial write exception thread")
+                traceback.print_exc()
+
+class SerialManagerThread(threading.Thread):
+    def __init__(self):
+        threading.Thread.__init__(self)
+        self._stopper = threading.Event()
+
+        self.queue_read = Queue(maxsize=10)
+        self.queue_write = Queue(maxsize=10)
+
+        self.thread1=None
+        self.thread2=None
+
+    def stop(self):
+        self._stopper.set()
+    def stopped(self):
+        return self._stopper.isSet()
+    def open_com(self,portName,baudRate):
+        self.ser = serial.Serial(portName, baudRate, timeout=3)
+        self.thread1 = serialReadThread(1, "SERIAL_READ", self.ser, self.queue_read)
+        self.thread2 = serialWriteThread(2, "SERIAL_WRITE", self.ser, self.queue_write)
+        self.thread1.start()
+        self.thread2.start()
+    def close_com(self):
+        if self.thread1 is not None:
+            self.thread1.stop()
+            self.thread1.join()
+        if self.thread2 is not None:
+            self.thread2.stop()
+            self.thread2.join()
+
     def run(self):
         global queue_serial_receive, queue_serial_send, queue_serial_gui
         global serialcom
+
         while True:
             time.sleep(0.01)
             # get data from serial port
-            serdata = serialcom.get_received_data()
-            if serdata is not None:
+            if self.queue_read.empty() == False:
+                sdata=self.queue_read.get(block=False)
                 if queue_serial_receive.full() == False:
-                    queue_serial_receive.put(serdata)
+                    queue_serial_receive.put(sdata)
                 if queue_serial_gui.full() == False:
-                    queue_serial_gui.put(serdata)
+                    queue_serial_gui.put(sdata)
             # send data to serial port
             if queue_serial_send.empty() == False:
-                serdata = queue_serial_send.get(block=False)
-                serialcom.send(serdata)
+                sdata = queue_serial_send.get(block=False)
+                if self.queue_write.full() == False:
+                    self.queue_write.put(sdata)
+
             if self.stopped():
+                self.close_com()
                 break
 
 class ControlThread(threading.Thread):
-    def __init__(self, threadID):
+    def __init__(self,):
         threading.Thread.__init__(self)
-        self.threadID = threadID
         self._stopper = threading.Event()
     def stop(self):
         self._stopper.set()
@@ -76,7 +166,6 @@ class ControlThread(threading.Thread):
                 break
 
 # GUI
-
 def start_threads():
     serialManagerThread.start()
     controlThread.start()
@@ -137,9 +226,6 @@ class MainWindow(Frame):
 
         # load widgets
         self.createGUI()
-
-        # start threads
-        start_threads()
 
         # start gui loop
         self.check_queue()
@@ -256,10 +342,12 @@ class MainWindow(Frame):
         self.toggle_fullscreen()
 
     def WIN_CALLBACK_connect(self):
-        global GLOBAL_PARAMS
-        serialcom.stop()
-        serialcom.config(GLOBAL_PARAMS['com']['serial_port'], GLOBAL_PARAMS['com']['baud_rate'])
-        serialcom.start()
+        global GLOBAL_PARAMS, serialManagerThread
+        serialManagerThread.stop()
+        serialManagerThread.join()
+        serialManagerThread = SerialManagerThread()
+        serialManagerThread.start()
+        serialManagerThread.open_com(GLOBAL_PARAMS['com']['serial_port'], GLOBAL_PARAMS['com']['baud_rate'])
 
     def WIN_CALLBACK_update_settings(self):
         self.write_config_data()
@@ -269,8 +357,6 @@ class MainWindow(Frame):
         global serialcom
         print('stop threads')
         stop_threads()
-        print('stop serial com')
-        serialcom.stop()
         if self.config_changed == True:
             self.write_config_data()
             messagebox.showinfo("Info", "Settings updated")
@@ -291,6 +377,10 @@ class MainWindow(Frame):
         # buttons
         self.btnExit = ttk.Button(self.topFrame, text="Exit", command=self.WIN_CALLBACK_exit, width=WIDGET_W)
         self.btnConnect = ttk.Button(self.topFrame, text="Connect", command=self.WIN_CALLBACK_connect, width=WIDGET_W)
+        self.btnStart = ttk.Button(self.topFrame, text="Start", width=WIDGET_W)
+        self.btnStop = ttk.Button(self.topFrame, text="Stop", width=WIDGET_W)
+        self.btnSave = ttk.Button(self.topFrame, text="Save", width=WIDGET_W)
+
         # textbox, spinbox values
         self.textReceive = tk.StringVar()
         self.textElapsed = tk.StringVar()
@@ -300,6 +390,23 @@ class MainWindow(Frame):
         # textbox
         self.labelElapsed = tk.Label(self.topFrame, textvariable=self.textElapsed, font=customFont, bg=self.widgetColor)
         self.entryTextReceive = tk.Label(self.topFrame,textvariable=self.textReceive, font=customFont, bg=self.widgetColor)
+
+
+        # plot
+        f = Figure(figsize=(5, 5), dpi=100)
+        a = f.add_subplot(111)
+        a.plot([1, 2, 3, 4, 5, 6, 7, 8], [5, 6, 1, 3, 8, 9, 3, 5])
+
+        # canvas = FigureCanvasTkAgg(f, self)
+        # canvas = FigureCanvasTkAgg(f, master=self.topFrame)
+        # canvas = tk.Canvas(self.topFrame, width=300, height=200, background='white')
+        # canvas.show()
+        # canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
+
+        # toolbar = NavigationToolbar2TkAgg(canvas, self)
+        # toolbar.update()
+        # canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
         # labels
         self.labelTextReceive = tk.Label(self.topFrame, width=WIDGET_W, text="Serial receive", bg=self.frameColor, foreground=self.widgetTextColor, font=customFont)
         # style
@@ -313,17 +420,29 @@ class MainWindow(Frame):
         self.labelElapsed.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY, sticky=EW, columnspan=2)
         r += 1
         self.btnConnect.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        # canvas._tkcanvas.grid(row=r, column=1, rowspan=3)
+        r += 1
+        self.btnStart.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+        self.btnStop.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+        self.btnSave.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
         r += 1
         self.btnExit.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        # canvas.get_tk_widget().grid(row=r, column=1, rowspan=3)
         r += 1
         self.labelTextReceive.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY, columnspan=1)
         self.entryTextReceive.grid(row=r, column=1, padx=WIDGET_PX, pady=WIDGET_PY, columnspan=1, sticky=EW)
 
 #################################################################
+
+# init classes (threads)
+serialManagerThread = SerialManagerThread()
+controlThread = ControlThread()
+start_threads()
+
 if __name__ == "__main__":
-    # init classes (threads)
-    serialManagerThread = SerialManagerThread(1)
-    controlThread = ControlThread(2)
+
 
     # initialise and start main loop
     print('app starting')

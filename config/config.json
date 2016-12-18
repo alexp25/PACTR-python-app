@@ -1,16 +1,16 @@
 {
     "com": {
-        "baud_rate": 115200, 
-        "serial_port": "COM5"
-    }, 
+        "baud_rate": 115200,
+        "serial_port": "COM4"
+    },
     "gui": {
-        "label_px": 2, 
-        "label_py": 0, 
-        "textbox_h": 2, 
-        "textbox_w": 100, 
-        "widget_h": 2, 
-        "widget_px": 10, 
-        "widget_py": 10, 
+        "label_px": 2,
+        "label_py": 0,
+        "textbox_h": 2,
+        "textbox_w": 100,
+        "widget_h": 2,
+        "widget_px": 10,
+        "widget_py": 10,
         "widget_w": 15
     }
 }
