@@ -16,12 +16,21 @@ import traceback
 from multiprocessing import Queue
 import serial
 
+import numpy
+
+from random import randint, choice
+
 
 #plot
 import matplotlib
 matplotlib.use("TkAgg")
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2TkAgg
 from matplotlib.figure import Figure
+# implement the default mpl key bindings
+from matplotlib.backend_bases import key_press_handler
+import matplotlib.animation as animation
+from matplotlib import style
+style.use('ggplot')
 
 qsize = 5
 queue_gui = Queue(maxsize=10)
@@ -31,6 +40,12 @@ queue_serial_gui = Queue(maxsize=qsize)
 
 CONFIG_FILE = 'config/config.json'
 GLOBAL_PARAMS = {}
+
+
+myfigure=None
+mycanvas=None
+myplot=None
+mycounter=0
 
 class serialReadThread (threading.Thread):
     def __init__(self,threadID,name,ser,queue_read):
@@ -156,10 +171,12 @@ class ControlThread(threading.Thread):
         return self._stopper.isSet()
     def run(self):
         global queue_serial_send, queue_serial_receive
+
         while True:
             time.sleep(1)
             # demo: send data periodically
             # usage: request data from central app
+
             if queue_serial_send.full() == False:
                 queue_serial_send.put('1\n')
             if self.stopped():
@@ -217,6 +234,11 @@ class MainWindow(Frame):
         self.filemenu.add_command(label="Exit", command=self.WIN_CALLBACK_exit)
         self.menubar.add_cascade(label="File", menu=self.filemenu)
 
+        self.filemenu1 = Menu(self.menubar, tearoff=0)
+        self.filemenu1.add_command(label="FESTO Plant", command=self.WIN_MENU_communication)
+        self.filemenu1.add_command(label="User guide", command=self.WIN_MENU_communication)
+        self.menubar.add_cascade(label="Help", menu=self.filemenu1)
+
         # display the menu
         self.master.config(menu=self.menubar,bg=self.frameColor)
 
@@ -226,6 +248,13 @@ class MainWindow(Frame):
 
         # load widgets
         self.createGUI()
+
+        # def on_closing():
+        #     if messagebox.askokcancel("Quit", "Do you want to quit?"):
+        #         root.destroy()
+
+        master.protocol("WM_DELETE_WINDOW", self.WIN_CALLBACK_exit)
+
 
         # start gui loop
         self.check_queue()
@@ -327,6 +356,361 @@ class MainWindow(Frame):
         r += 1
         b1.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY, columnspan=2)
 
+    def WIN_CALLBACK_PRBS(self):
+        global GLOBAL_PARAMS
+        WIDGET_PX = GLOBAL_PARAMS['gui']['widget_px']
+        WIDGET_PY = GLOBAL_PARAMS['gui']['widget_py']
+        LABEL_PX = GLOBAL_PARAMS['gui']['label_px']
+        LABEL_PY = GLOBAL_PARAMS['gui']['label_py']
+        WIDGET_W = GLOBAL_PARAMS['gui']['widget_w']
+        WIDGET_H = GLOBAL_PARAMS['gui']['widget_h']
+        Dialog2 = Toplevel()
+        Dialog2.title("PRBS")
+
+        r = 0
+        frame1 = Frame(Dialog2)
+        frame1.grid(row=r, column=0, sticky=EW)
+        frame1.columnconfigure(0, weight=1)
+        frame1.columnconfigure(1, weight=1)
+
+        label1 = ttk.Label(frame1, text="PRBS:", )
+        label1.grid(row=0, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+
+        label1 = tk.Label(frame1, text="Length:", )
+        label1.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        text1 = tk.StringVar()
+        text1.set("Value")
+        entry1 = tk.Label(frame1, textvariable=text1)
+        entry1.grid(row=r, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+
+        label1 = tk.Label(frame1, text="Magnitude", )
+        label1.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        text2 = tk.StringVar()
+        text2.set("Value")
+        entry2 = tk.Label(frame1, textvariable=text2)
+        entry2.grid(row=r, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+
+        label1 = tk.Label(frame1, text="Register length:", )
+        label1.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        text2 = tk.StringVar()
+        text2.set("Value")
+        entry2 = tk.Label(frame1, textvariable=text2)
+        entry2.grid(row=r, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+
+        label1 = tk.Label(frame1, text="Frequency Divider:", )
+        label1.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        text2 = tk.StringVar()
+        text2.set("Value")
+        entry2 = tk.Label(frame1, textvariable=text2)
+        entry2.grid(row=r, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+
+        btnStart = ttk.Button(frame1, text="OK", width=WIDGET_W)
+        btnStart.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY, sticky=EW, columnspan=2)
+        r += 1
+        btnStart = ttk.Button(frame1, text="Cancel", width=WIDGET_W)
+        btnStart.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY, sticky=EW, columnspan=2)
+
+    def WIN_CALLBACK_rampReference(self):
+        global GLOBAL_PARAMS
+        WIDGET_PX = GLOBAL_PARAMS['gui']['widget_px']
+        WIDGET_PY = GLOBAL_PARAMS['gui']['widget_py']
+        LABEL_PX = GLOBAL_PARAMS['gui']['label_px']
+        LABEL_PY = GLOBAL_PARAMS['gui']['label_py']
+        WIDGET_W = GLOBAL_PARAMS['gui']['widget_w']
+        WIDGET_H = GLOBAL_PARAMS['gui']['widget_h']
+        Dialog2 = Toplevel()
+        Dialog2.title("RampReference")
+
+        r=0
+        frame1 = Frame(Dialog2)
+        frame1.grid(row=r, column=0, sticky=EW)
+        frame1.columnconfigure(0, weight=1)
+        frame1.columnconfigure(1, weight=1)
+
+        label1 = tk.Label(frame1, text="Slope:", )
+        label1.grid(row=0, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        text10 = tk.StringVar()
+        text10.set("Value")
+        entry10 = tk.Label(frame1, textvariable=text10)
+        entry10.grid(row=0, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+        r+=1
+        btnStart = ttk.Button(frame1, text="OK", width=WIDGET_W)
+        btnStart.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY, sticky=EW, columnspan=2)
+        r+=1
+        btnStart = ttk.Button(frame1, text="Cancel", width=WIDGET_W)
+        btnStart.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY, sticky=EW, columnspan=2)
+
+    def WIN_CALLBACK_sinusoidalReference(self):
+        global GLOBAL_PARAMS
+        WIDGET_PX = GLOBAL_PARAMS['gui']['widget_px']
+        WIDGET_PY = GLOBAL_PARAMS['gui']['widget_py']
+        LABEL_PX = GLOBAL_PARAMS['gui']['label_px']
+        LABEL_PY = GLOBAL_PARAMS['gui']['label_py']
+        WIDGET_W = GLOBAL_PARAMS['gui']['widget_w']
+        WIDGET_H = GLOBAL_PARAMS['gui']['widget_h']
+        Dialog2 = Toplevel()
+        Dialog2.title("SinusoidalReference")
+
+        r = 0
+        frame1 = Frame(Dialog2)
+        frame1.grid(row=r, column=0, sticky=EW)
+        frame1.columnconfigure(0, weight=1)
+        frame1.columnconfigure(1, weight=1)
+
+        label1 = tk.Label(frame1, text="Magnitude:", )
+        label1.grid(row=0, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        text10 = tk.StringVar()
+        text10.set("Value")
+        entry10 = tk.Label(frame1, textvariable=text10)
+        entry10.grid(row=0, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+        label1 = tk.Label(frame1, text="Frequency:", )
+        label1.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        text10 = tk.StringVar()
+        text10.set("Value")
+        entry10 = tk.Label(frame1, textvariable=text10)
+        entry10.grid(row=0, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+        label1 = tk.Label(frame1, text="Initial phase:", )
+        label1.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        text10 = tk.StringVar()
+        text10.set("Value")
+        entry10 = tk.Label(frame1, textvariable=text10)
+        entry10.grid(row=0, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+
+        btnStart = ttk.Button(frame1, text="OK", width=WIDGET_W)
+        btnStart.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY, sticky=EW, columnspan=2)
+        r += 1
+        btnStart = ttk.Button(frame1, text="Cancel", width=WIDGET_W)
+        btnStart.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY, sticky=EW, columnspan=2)
+
+    def WIN_CALLBACK_diracReference(self):
+        global GLOBAL_PARAMS
+        WIDGET_PX = GLOBAL_PARAMS['gui']['widget_px']
+        WIDGET_PY = GLOBAL_PARAMS['gui']['widget_py']
+        LABEL_PX = GLOBAL_PARAMS['gui']['label_px']
+        LABEL_PY = GLOBAL_PARAMS['gui']['label_py']
+        WIDGET_W = GLOBAL_PARAMS['gui']['widget_w']
+        WIDGET_H = GLOBAL_PARAMS['gui']['widget_h']
+        Dialog2 = Toplevel()
+        Dialog2.title("DiracReference")
+
+        r=0
+        frame1 = Frame(Dialog2)
+        frame1.grid(row=r, column=0, sticky=EW)
+        frame1.columnconfigure(0, weight=1)
+        frame1.columnconfigure(1, weight=1)
+
+        label1 = tk.Label(frame1, text="Magnitude:", )
+        label1.grid(row=0, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        text10 = tk.StringVar()
+        text10.set("Value")
+        entry10 = tk.Label(frame1, textvariable=text10)
+        entry10.grid(row=0, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+        r+=1
+        btnStart = ttk.Button(frame1, text="OK", width=WIDGET_W)
+        btnStart.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY, sticky=EW, columnspan=2)
+        r+=1
+        btnStart = ttk.Button(frame1, text="Cancel", width=WIDGET_W)
+        btnStart.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY, sticky=EW, columnspan=2)
+
+    def WIN_CALLBACK_stepReference(self):
+        global GLOBAL_PARAMS
+        WIDGET_PX = GLOBAL_PARAMS['gui']['widget_px']
+        WIDGET_PY = GLOBAL_PARAMS['gui']['widget_py']
+        LABEL_PX = GLOBAL_PARAMS['gui']['label_px']
+        LABEL_PY = GLOBAL_PARAMS['gui']['label_py']
+        WIDGET_W = GLOBAL_PARAMS['gui']['widget_w']
+        WIDGET_H = GLOBAL_PARAMS['gui']['widget_h']
+        Dialog2 = Toplevel()
+        Dialog2.title("StepReference")
+
+        r = 0
+        frame1 = Frame(Dialog2)
+        frame1.grid(row=r, column=0, sticky=EW)
+        frame1.columnconfigure(0, weight=1)
+        frame1.columnconfigure(1, weight=1)
+
+        label1 = tk.Label(frame1, text="Magnitude:", )
+        label1.grid(row=0, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        text10 = tk.StringVar()
+        text10.set("Value")
+        entry10 = tk.Label(frame1, textvariable=text10)
+        entry10.grid(row=0, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+        btnStart = ttk.Button(frame1, text="OK", width=WIDGET_W)
+        btnStart.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY, sticky=EW, columnspan=2)
+        r += 1
+        btnStart = ttk.Button(frame1, text="Cancel", width=WIDGET_W)
+        btnStart.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY, sticky=EW, columnspan=2)
+
+    def WIN_CALLBACK_exp_model_param(self):
+        global GLOBAL_PARAMS
+        WIDGET_PX = GLOBAL_PARAMS['gui']['widget_px']
+        WIDGET_PY = GLOBAL_PARAMS['gui']['widget_py']
+        LABEL_PX = GLOBAL_PARAMS['gui']['label_px']
+        LABEL_PY = GLOBAL_PARAMS['gui']['label_py']
+        WIDGET_W = GLOBAL_PARAMS['gui']['widget_w']
+        WIDGET_H = GLOBAL_PARAMS['gui']['widget_h']
+        Dialog2 = Toplevel()
+        Dialog2.title("Model parameter identification")
+        return
+
+    def WIN_CALLBACK_start(self):
+        global GLOBAL_PARAMS
+        global myseries_t, myseries_y
+        global myfigure, myplot, mycanvas
+        WIDGET_PX = GLOBAL_PARAMS['gui']['widget_px']
+        WIDGET_PY = GLOBAL_PARAMS['gui']['widget_py']
+        LABEL_PX = GLOBAL_PARAMS['gui']['label_px']
+        LABEL_PY = GLOBAL_PARAMS['gui']['label_py']
+        WIDGET_W = GLOBAL_PARAMS['gui']['widget_w']
+        WIDGET_H = GLOBAL_PARAMS['gui']['widget_h']
+        Dialog2 = Toplevel()
+        Dialog2.title("Control Panel")
+
+        def cb():
+            print("variable is", cbvar.get())
+
+        # menu
+        menubar = Menu(Dialog2)
+        # create a pulldown menu, and add it to the menu bar
+        filemenu = Menu(menubar, tearoff=0)
+        filemenu.add_command(label="Export data")
+        filemenu.add_command(label="Save plot")
+        menubar.add_cascade(label="Data", menu=filemenu)
+        filemenu = Menu(menubar, tearoff=0)
+        # filemenu.add_command(label="Controller manual input")
+        filemenu2 = Menu(filemenu, tearoff=0)
+        filemenu2.add_command(label="PID", command=self.WIN_CALLBACK_ControllerPID)
+        filemenu2.add_command(label="RST", command=self.WIN_CALLBACK_ControllerRST)
+        filemenu.add_cascade(label="Controller manual input", menu=filemenu2)
+        filemenu.add_command(label="Controller computation")
+        menubar.add_cascade(label="Controller", menu=filemenu)
+        filemenu = Menu(menubar, tearoff=0)
+        filemenu.add_command(label="Step", command=self.WIN_CALLBACK_stepReference)
+        filemenu.add_command(label="Sinusoidal", command=self.WIN_CALLBACK_sinusoidalReference)
+        filemenu.add_command(label="Dirac", command=self.WIN_CALLBACK_diracReference)
+        filemenu.add_command(label="Ramp", command=self.WIN_CALLBACK_rampReference)
+        filemenu.add_command(label="PRBS", command=self.WIN_CALLBACK_PRBS)
+        menubar.add_cascade(label="Reference config", menu=filemenu)
+
+        Dialog2.config(menu=menubar)
+
+        r=0
+
+        frame1 = Frame(Dialog2)
+        frame1.grid(row=r, column=0, sticky=EW)
+
+        frame1.columnconfigure(0, weight=1)
+        frame1.columnconfigure(1, weight=1)
+
+        label1 = tk.Label(frame1, text="Control algorithm", )
+        label1.grid(row=0, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        text10 = tk.StringVar()
+        text10.set("PID")
+        entry10 = tk.Label(frame1, textvariable=text10)
+        entry10.grid(row=0, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+
+        r+=1
+
+        frame1 = Frame(Dialog2)
+        frame1.grid(row=r, column=0, sticky=EW)
+
+        frame1.columnconfigure(0, weight=1)
+        frame1.columnconfigure(1, weight=1)
+        frame1.columnconfigure(2, weight=1)
+        frame1.columnconfigure(3, weight=1)
+
+        label1 = tk.Label(frame1, text="Command", )
+        label1.grid(row=0, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        text1 = tk.StringVar()
+        text1.set("0")
+        entry1 = tk.Label(frame1, textvariable=text1)
+        entry1.grid(row=0, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+
+        label1 = tk.Label(frame1, text="Output", )
+        label1.grid(row=0, column=2, padx=WIDGET_PX, pady=WIDGET_PY)
+        text2 = tk.StringVar()
+        text2.set("0")
+        entry2 = tk.Label(frame1, textvariable=text2)
+        entry2.grid(row=0, column=3, padx=WIDGET_PX, pady=WIDGET_PY)
+
+        r+=1
+
+        # First set up the figure, the axis, and the plot element we want to animate
+        myfigure = Figure(figsize=(5, 4), dpi=100)
+        myplot = myfigure.add_subplot(111)
+        t = numpy.arange(0.0, 3.0, 0.01)
+        y = numpy.sin(2 * numpy.pi * t)
+        myplot.plot(t, y)
+
+        frame1 = Frame(Dialog2)
+        frame1.grid(row=r, column=0, sticky=EW)
+
+        # a tk.DrawingArea
+        mycanvas = FigureCanvasTkAgg(myfigure, master=frame1)
+        mycanvas.show()
+
+        toolbar = NavigationToolbar2TkAgg(mycanvas, frame1)
+        toolbar.update()
+
+        mycanvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+        mycanvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+
+        frame1 = Frame(Dialog2)
+        frame1.grid(row=r, column=1, sticky=EW)
+        frame1.columnconfigure(0, weight=1)
+
+        cbvar = IntVar()
+        c = Checkbutton(
+            frame1, text="Reference",
+            variable=cbvar,
+            command=cb)
+        c.grid(row=0,column=0, padx=WIDGET_PX, pady=WIDGET_PY, sticky=W)
+        cbvar2 = IntVar()
+        c = Checkbutton(
+            frame1, text="Output",
+            variable=cbvar2,
+            command=cb)
+        c.grid(row=1, column=0, padx=WIDGET_PX, pady=WIDGET_PY, sticky=W)
+        cbvar3 = IntVar()
+        c = Checkbutton(
+            frame1, text="Command",
+            variable=cbvar3,
+            command=cb)
+        c.grid(row=2, column=0, padx=WIDGET_PX, pady=WIDGET_PY, sticky=W)
+
+        r+=1
+        btnEE = ttk.Button(Dialog2, text="Execution element control",
+                                          command=self.WIN_CALLBACK_eeControl, width=WIDGET_W)
+        btnEE.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+
+        def on_key_event(event):
+            print('you pressed %s' % event.key)
+            key_press_handler(event, mycanvas, toolbar)
+
+        mycanvas.mpl_connect('key_press_event', on_key_event)
+
+        def update():
+            global myfigure, myplot, mycanvas, mycounter
+            t = numpy.arange(0.0, 3.0, 0.01)
+            y = numpy.sin(2 * numpy.pi * t + mycounter*0.1)
+            myplot.clear()
+            myplot.plot(t, y)
+            mycanvas.show()
+            mycounter+=1
+
+        timer = mycanvas.new_timer(interval=100)
+        timer.add_callback(update)
+        timer.start()
+
 
     def toggle_fullscreen(self, event=None):
         self.state = not self.state  # Just toggling the boolean
@@ -349,12 +733,307 @@ class MainWindow(Frame):
         serialManagerThread.start()
         serialManagerThread.open_com(GLOBAL_PARAMS['com']['serial_port'], GLOBAL_PARAMS['com']['baud_rate'])
 
+    def WIN_CALLBACK_eeControl(self):
+        global GLOBAL_PARAMS
+        WIDGET_PX = GLOBAL_PARAMS['gui']['widget_px']
+        WIDGET_PY = GLOBAL_PARAMS['gui']['widget_py']
+        LABEL_PX = GLOBAL_PARAMS['gui']['label_px']
+        LABEL_PY = GLOBAL_PARAMS['gui']['label_py']
+        WIDGET_W = GLOBAL_PARAMS['gui']['widget_w']
+        WIDGET_H = GLOBAL_PARAMS['gui']['widget_h']
+        Dialog2 = Toplevel()
+        Dialog2.title("EEControl")
+
+        r = 0
+
+        frame1 = Frame(Dialog2)
+        frame1.grid(row=r, column=0, sticky=EW)
+
+        frame1.columnconfigure(0, weight=1)
+        frame1.columnconfigure(1, weight=1)
+
+        label1 = ttk.Label(frame1, text="Valve Control:", )
+        label1.grid(row=0, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+
+        frame1 = Frame(Dialog2)
+        frame1.grid(row=r, column=0, sticky=EW)
+
+        frame1.columnconfigure(0, weight=1)
+        frame1.columnconfigure(1, weight=1)
+        frame1.columnconfigure(2, weight=1)
+        frame1.columnconfigure(3, weight=1)
+
+        label1 = tk.Label(frame1, text="V1:", )
+        label1.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        label1 = tk.Label(frame1, text="V2:", )
+        label1.grid(row=r, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+        label1 = tk.Label(frame1, text="V3:", )
+        label1.grid(row=r, column=2, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+        v = IntVar()
+        MODES = [
+            ("Open", "1"),
+            ("Close", "L")
+        ]
+
+        rbFrame1 = Frame(Dialog2, border=1)
+        rbFrame1.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+
+        rbFrame1.config(bg=self.widgetTextColor)
+        for text, mode in MODES:
+            b = tk.Radiobutton(rbFrame1, text=text, value=mode)
+            b.pack(anchor=W)
+
+        rbFrame2 = Frame(Dialog2, border=1)
+        rbFrame2.grid(row=r, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+        rbFrame2.config(bg=self.widgetTextColor)
+        for text, mode in MODES:
+            b = Radiobutton(rbFrame2, text=text, value=mode)
+            b.pack(anchor=W)
+
+        rbFrame3 = Frame(Dialog2, border=1)
+        rbFrame3.grid(row=r, column=2, padx=WIDGET_PX, pady=WIDGET_PY)
+        rbFrame3.config(bg=self.widgetTextColor)
+        for text, mode in MODES:
+            b = Radiobutton(rbFrame3, text=text, value=mode)
+            b.pack(anchor=W)
+
+        r += 1
+        label1 = ttk.Label(frame1, text="Pump Control:", )
+        label1.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+
+        r += 1
+        label1 = tk.Label(frame1, text="P1:", )
+        label1.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        label1 = tk.Label(frame1, text="P2:", )
+        label1.grid(row=r, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+        label1 = tk.Label(frame1, text="P3:", )
+        label1.grid(row=r, column=2, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+        btnStart = ttk.Button(frame1, text="OK", width=WIDGET_W)
+        btnStart.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+        btnStart = ttk.Button(frame1, text="Cancel", width=WIDGET_W)
+        btnStart.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+
+    def WIN_CALLBACK_ControllerRST(self):
+        global GLOBAL_PARAMS
+        WIDGET_PX = GLOBAL_PARAMS['gui']['widget_px']
+        WIDGET_PY = GLOBAL_PARAMS['gui']['widget_py']
+        LABEL_PX = GLOBAL_PARAMS['gui']['label_px']
+        LABEL_PY = GLOBAL_PARAMS['gui']['label_py']
+        WIDGET_W = GLOBAL_PARAMS['gui']['widget_w']
+        WIDGET_H = GLOBAL_PARAMS['gui']['widget_h']
+        Dialog2 = Toplevel()
+        Dialog2.title("ControllerRST")
+
+        r = 0
+        frame1 = Frame(Dialog2)
+        frame1.grid(row=r, column=0, sticky=EW)
+        frame1.columnconfigure(0, weight=1)
+        frame1.columnconfigure(1, weight=1)
+
+        label1 = tk.Label(frame1, text="Degree R:", )
+        label1.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        text1 = tk.StringVar()
+        text1.set("Value")
+        entry1 = tk.Label(frame1, textvariable=text1)
+        entry1.grid(row=r, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+
+        label1 = tk.Label(frame1, text="Degree S:", )
+        label1.grid(row=r, column=2, padx=WIDGET_PX, pady=WIDGET_PY)
+        text2 = tk.StringVar()
+        text2.set("Value")
+        entry2 = tk.Label(frame1, textvariable=text2)
+        entry2.grid(row=r, column=3, padx=WIDGET_PX, pady=WIDGET_PY)
+
+        label1 = tk.Label(frame1, text="Degree T:", )
+        label1.grid(row=r, column=4, padx=WIDGET_PX, pady=WIDGET_PY)
+        text2 = tk.StringVar()
+        text2.set("Value")
+        entry2 = tk.Label(frame1, textvariable=text2)
+        entry2.grid(row=r, column=5, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+
+        listbox = Listbox(frame1)
+        listbox.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY, sticky=EW, columnspan=2)
+        for item in ["R(0):", "R(1):", "R(2):", "...", "R(value):"]:
+            listbox.insert(END, item)
+
+        listbox = Listbox(frame1)
+        listbox.grid(row=r, column=1, padx=WIDGET_PX, pady=WIDGET_PY, sticky=EW, columnspan=2)
+        for item in ["S(0):", "S(1):", "S(2):", "...", "S(value):"]:
+            listbox.insert(END, item)
+
+        listbox = Listbox(frame1)
+        listbox.grid(row=r, column=2, padx=WIDGET_PX, pady=WIDGET_PY)
+        for item in ["T(0):", "T(1):", "T(2):", "...", "T(value):"]:
+            listbox.insert(END, item)
+        r += 1
+        btnStart = tk.Button(frame1, text="OK", width=WIDGET_W)
+        btnStart.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+        btnStart = tk.Button(frame1, text="Cancel", width=WIDGET_W)
+        btnStart.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+
+
+    def WIN_CALLBACK_ControllerPID(self):
+        global GLOBAL_PARAMS
+        WIDGET_PX = GLOBAL_PARAMS['gui']['widget_px']
+        WIDGET_PY = GLOBAL_PARAMS['gui']['widget_py']
+        LABEL_PX = GLOBAL_PARAMS['gui']['label_px']
+        LABEL_PY = GLOBAL_PARAMS['gui']['label_py']
+        WIDGET_W = GLOBAL_PARAMS['gui']['widget_w']
+        WIDGET_H = GLOBAL_PARAMS['gui']['widget_h']
+        Dialog2 = Toplevel()
+        Dialog2.title("Controller")
+
+        r = 0
+        frame1 = Frame(Dialog2)
+        frame1.grid(row=r, column=0, sticky=EW)
+        frame1.columnconfigure(0, weight=1)
+        frame1.columnconfigure(1, weight=1)
+
+        label1 = ttk.Label(frame1, text="PID command:", )
+        label1.grid(row=0, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+
+        label1 = tk.Label(frame1, text="Kp:", )
+        label1.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        text1 = tk.StringVar()
+        text1.set("Value")
+        entry1 = tk.Label(frame1, textvariable=text1)
+        entry1.grid(row=r, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+
+        label1 = tk.Label(frame1, text="Ti", )
+        label1.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        text2 = tk.StringVar()
+        text2.set("Value")
+        entry2 = tk.Label(frame1, textvariable=text2)
+        entry2.grid(row=r, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+
+        label1 = tk.Label(frame1, text="Td:", )
+        label1.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        text2 = tk.StringVar()
+        text2.set("Value")
+        entry2 = tk.Label(frame1, textvariable=text2)
+        entry2.grid(row=r, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+
+        btnStart = ttk.Button(frame1, text="OK", width=WIDGET_W)
+        btnStart.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY, sticky=EW, columnspan=2)
+        r += 1
+        btnStart = ttk.Button(frame1, text="Cancel", width=WIDGET_W)
+        btnStart.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY, sticky=EW, columnspan=2)
+
+
+    def WIN_CALLBACK_exp_ident(self):
+        global GLOBAL_PARAMS
+        WIDGET_PX = GLOBAL_PARAMS['gui']['widget_px']
+        WIDGET_PY = GLOBAL_PARAMS['gui']['widget_py']
+        LABEL_PX = GLOBAL_PARAMS['gui']['label_px']
+        LABEL_PY = GLOBAL_PARAMS['gui']['label_py']
+        WIDGET_W = GLOBAL_PARAMS['gui']['widget_w']
+        WIDGET_H = GLOBAL_PARAMS['gui']['widget_h']
+        Dialog2 = Toplevel()
+        Dialog2.title("Experimental Identification")
+
+        r = 0
+
+        frame1 = Frame(Dialog2)
+        frame1.grid(row=r, column=0, sticky=EW)
+
+        frame1.columnconfigure(0, weight=1)
+        frame1.columnconfigure(1, weight=1)
+
+        label1 = tk.Label(frame1, text="Connencted Device:", )
+        label1.grid(row=0, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        text10 = tk.StringVar()
+        text10.set("Device name")
+        entry10 = tk.Label(frame1, textvariable=text10)
+        entry10.grid(row=0, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+
+        r += 1
+
+        frame1 = Frame(Dialog2)
+        frame1.grid(row=r, column=0, sticky=EW)
+
+        frame1.columnconfigure(0, weight=1)
+        frame1.columnconfigure(1, weight=1)
+        frame1.columnconfigure(2, weight=1)
+        frame1.columnconfigure(3, weight=1)
+
+        label1 = ttk.Label(frame1, text="PRBS:", )
+        label1.grid(row=0, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+
+        label1 = tk.Label(frame1, text="Length:", )
+        label1.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        text1 = tk.StringVar()
+        text1.set("Value")
+        entry1 = tk.Label(frame1, textvariable=text1)
+        entry1.grid(row=r, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+
+        label1 = tk.Label(frame1, text="Magnitude", )
+        label1.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        text2 = tk.StringVar()
+        text2.set("Value")
+        entry2 = tk.Label(frame1, textvariable=text2)
+        entry2.grid(row=r, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+
+        label1 = tk.Label(frame1, text="Register length:", )
+        label1.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        text2 = tk.StringVar()
+        text2.set("Value")
+        entry2 = tk.Label(frame1, textvariable=text2)
+        entry2.grid(row=r, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+
+        label1 = tk.Label(frame1, text="Frequency Divider:", )
+        label1.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        text2 = tk.StringVar()
+        text2.set("Value")
+        entry2 = tk.Label(frame1, textvariable=text2)
+        entry2.grid(row=r, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+
+        v = IntVar()
+        MODES = [
+            ("Structure 1", "1"),
+            ("Structure 2", "2"),
+            ("Structure 3", "3"),
+            ("Structure 4", "L")
+        ]
+        rbFrame1 = Frame(Dialog2, border=4)
+        rbFrame1.grid(row=1, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+
+        rbFrame1.config(bg=self.widgetTextColor)
+        for text, mode in MODES:
+            b = Radiobutton(rbFrame1, text=text, value=mode)
+            b.pack(anchor=W)
+        r += 1
+        btnStart = ttk.Button(frame1, text="OK", width=WIDGET_W)
+        btnStart.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+        btnStart = ttk.Button(frame1, text="Cancel", width=WIDGET_W)
+        btnStart.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+        btnStart = ttk.Button(frame1, text="Help", width=WIDGET_W)
+        btnStart.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+
+
     def WIN_CALLBACK_update_settings(self):
         self.write_config_data()
         messagebox.showinfo("Info", "Settings updated")
 
     def WIN_CALLBACK_exit(self):
         global serialcom
+
         print('stop threads')
         stop_threads()
         if self.config_changed == True:
@@ -374,65 +1053,97 @@ class MainWindow(Frame):
         # layout weight
         self.topFrame.columnconfigure(0, weight=0)
         self.topFrame.columnconfigure(1, weight=1)
-        # buttons
-        self.btnExit = ttk.Button(self.topFrame, text="Exit", command=self.WIN_CALLBACK_exit, width=WIDGET_W)
-        self.btnConnect = ttk.Button(self.topFrame, text="Connect", command=self.WIN_CALLBACK_connect, width=WIDGET_W)
-        self.btnStart = ttk.Button(self.topFrame, text="Start", width=WIDGET_W)
-        self.btnStop = ttk.Button(self.topFrame, text="Stop", width=WIDGET_W)
-        self.btnSave = ttk.Button(self.topFrame, text="Save", width=WIDGET_W)
-
-        # textbox, spinbox values
-        self.textReceive = tk.StringVar()
-        self.textElapsed = tk.StringVar()
-        # self.textElapsed.set("Test timer")
         # custom font
         customFont = font.Font(family="arial", size=14, slant="roman")
-        # textbox
-        self.labelElapsed = tk.Label(self.topFrame, textvariable=self.textElapsed, font=customFont, bg=self.widgetColor)
-        self.entryTextReceive = tk.Label(self.topFrame,textvariable=self.textReceive, font=customFont, bg=self.widgetColor)
-
-
-        # plot
-        f = Figure(figsize=(5, 5), dpi=100)
-        a = f.add_subplot(111)
-        a.plot([1, 2, 3, 4, 5, 6, 7, 8], [5, 6, 1, 3, 8, 9, 3, 5])
-
-        # canvas = FigureCanvasTkAgg(f, self)
-        # canvas = FigureCanvasTkAgg(f, master=self.topFrame)
-        # canvas = tk.Canvas(self.topFrame, width=300, height=200, background='white')
-        # canvas.show()
-        # canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
-
-        # toolbar = NavigationToolbar2TkAgg(canvas, self)
-        # toolbar.update()
-        # canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
-        # labels
-        self.labelTextReceive = tk.Label(self.topFrame, width=WIDGET_W, text="Serial receive", bg=self.frameColor, foreground=self.widgetTextColor, font=customFont)
         # style
         s = ttk.Style()
-        s.configure('TButton', font=customFont,relief="groove")
+        s.configure('TButton', font=customFont, relief="groove")
         s.configure('TRadiobutton', font=customFont)
         s.configure('TEntry', font=customFont)
         s.configure('TLabel', font=customFont)
-        # layout
+
         r = 0
+        # textbox
+        self.textElapsed = tk.StringVar()
+        self.labelElapsed = tk.Label(self.topFrame, textvariable=self.textElapsed, font=customFont, bg=self.widgetColor)
         self.labelElapsed.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY, sticky=EW, columnspan=2)
         r += 1
-        self.btnConnect.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
-        # canvas._tkcanvas.grid(row=r, column=1, rowspan=3)
+        self.label1 = tk.Label(self.topFrame, width=WIDGET_W, text="System identification", bg=self.frameColor,
+                               foreground=self.widgetTextColor, font=customFont)
+        self.label1.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        r+=1
+        self.btnExpId = ttk.Button(self.topFrame, text="Experimental identification",command=self.WIN_CALLBACK_exp_ident, width=WIDGET_W)
+        self.btnExpId.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        r+=1
+        self.btnModelParamId = ttk.Button(self.topFrame, text="Model parameter identification", command=self.WIN_CALLBACK_exp_model_param, width=WIDGET_W)
+        self.btnModelParamId.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+
         r += 1
-        self.btnStart.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        self.label2 = tk.Label(self.topFrame, width=WIDGET_W, text="FESTO Plant", bg=self.frameColor,
+                                         foreground=self.widgetTextColor, font=customFont)
+        self.label2.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        r+=1
+        self.btnPCC = ttk.Button(self.topFrame, text="Peripheral Control Configuration", width=WIDGET_W)
+        self.btnPCC.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
         r += 1
-        self.btnStop.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+        self.btnDS = ttk.Button(self.topFrame, text="Device Status", width=WIDGET_W)
+        self.btnDS.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
         r += 1
-        self.btnSave.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
+
+        r=1
+        self.label1 = tk.Label(self.topFrame, width=WIDGET_W, text="Plant Control", bg=self.frameColor,
+                                         foreground=self.widgetTextColor, font=customFont)
+        self.label1.grid(row=r, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
         r += 1
-        self.btnExit.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY)
-        # canvas.get_tk_widget().grid(row=r, column=1, rowspan=3)
+
+        v = IntVar()
+        MODES = [
+            ("Local", "1"),
+            ("Remote", "L")
+        ]
+
+        self.rbFrame1 = Frame(self.topFrame, border=4)
+        self.rbFrame1.grid(row=r, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+        self.rbFrame1.config(bg=self.widgetTextColor)
+        for text, mode in MODES:
+            b = Radiobutton(self.rbFrame1, text=text, value=mode)
+            b.pack(anchor=W)
+
+        # listbox = Listbox(self.topFrame)
+        # r += 1
+        # listbox.grid(row=r, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+        # for item in ["Manual", "Automatic"]:
+        #     listbox.insert(END, item)
+        r+=1
+        self.label1 = tk.Label(self.topFrame, width=WIDGET_W, text="Control type", bg=self.frameColor,
+                               foreground=self.widgetTextColor, font=customFont)
+        self.label1.grid(row=r, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+        r+=1
+        variable = StringVar(self.topFrame)
+        variable.set("Manual")  # default value
+        w = OptionMenu(self.topFrame, variable, "Manual","Automatic")
+        w.grid(row=r, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+
         r += 1
-        self.labelTextReceive.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY, columnspan=1)
-        self.entryTextReceive.grid(row=r, column=1, padx=WIDGET_PX, pady=WIDGET_PY, columnspan=1, sticky=EW)
+        self.btnConnection = ttk.Button(self.topFrame, text="Bluetooth Connection", width=WIDGET_W, command=self.WIN_MENU_communication)
+        self.btnConnection.grid(row=r, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+        self.btnStart = ttk.Button(self.topFrame, text="Connect", width=WIDGET_W, command=self.WIN_CALLBACK_connect)
+        self.btnStart.grid(row=r, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+        r += 1
+        self.btnStart = ttk.Button(self.topFrame, text="Start", width=WIDGET_W, command=self.WIN_CALLBACK_start)
+        self.btnStart.grid(row=r, column=1, padx=WIDGET_PX, pady=WIDGET_PY)
+
+
+        r=10
+        self.labelTextReceive = tk.Label(self.topFrame, width=WIDGET_W, text="Received data",
+                                         bg=self.frameColor, foreground=self.widgetTextColor, font=customFont)
+        self.labelTextReceive.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY, columnspan=2)
+        r+=1
+        self.textReceive = tk.StringVar()
+        self.entryTextReceive = tk.Label(self.topFrame, textvariable=self.textReceive, font=customFont,
+                                         bg=self.widgetColor)
+        self.entryTextReceive.grid(row=r, column=0, padx=WIDGET_PX, pady=WIDGET_PY, columnspan=2, sticky=EW)
 
 #################################################################
 
@@ -456,7 +1167,12 @@ if __name__ == "__main__":
 
     mygui = MainWindow(root,fscreen)
     mygui.pack(fill=BOTH)
+
+
+
+
     root.mainloop()
+
 
 
 

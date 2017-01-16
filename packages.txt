@@ -1,0 +1,14 @@
+Pillow
+cycler
+imutils
+matplotlib
+numpy
+pandas
+pyparsing
+pyserial
+python-csv
+python-dateutil
+pytz
+setuptools
+six
+xlrd
