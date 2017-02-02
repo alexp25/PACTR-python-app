@@ -9,8 +9,8 @@
         "textbox_h": 2,
         "textbox_w": 100,
         "widget_h": 2,
-        "widget_px": 10,
+        "widget_px": 20,
         "widget_py": 10,
-        "widget_w": 15
+        "widget_w": 30
     }
 }
